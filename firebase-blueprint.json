@@ -1,0 +1,337 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated SOC operator profile linked to Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID matching the document ID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254,
+          "description": "Verified operator email address (PII, owner/admin only)."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name shown in the SOC console."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["analyst", "engineer", "admin"],
+          "description": "SOC RBAC role; non-admin self-registration is locked to analyst."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last profile update."
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Explicit RBAC admin membership record keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "grantedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "grantedBy", "createdAt"]
+    },
+    "IncidentCase": {
+      "title": "IncidentCase",
+      "description": "Persistent SOC incident investigation case.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["NEW", "OPEN", "IN_PROGRESS", "CONTAINED", "RESOLVED", "CLOSED"]
+        },
+        "assignee": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "title", "description", "severity", "status", "assignee", "createdAt", "updatedAt"]
+    },
+    "CaseNote": {
+      "title": "CaseNote",
+      "description": "Analyst investigation note stored in a subcollection under an IncidentCase.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "caseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "caseId", "ownerId", "author", "note", "createdAt"]
+    },
+    "CustomRule": {
+      "title": "CustomRule",
+      "description": "Persistent custom SIEM / Sigma detection rule.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ruleNumericId": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "level": {
+          "type": "number"
+        },
+        "logType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "rawSigma": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "ruleNumericId", "name", "title", "description", "level", "logType", "enabled", "rawSigma", "createdAt", "updatedAt"]
+    },
+    "SavedSearch": {
+      "title": "SavedSearch",
+      "description": "Persisted analyst threat-hunting piped query.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "name", "query", "description", "createdAt", "updatedAt"]
+    },
+    "AlertTriage": {
+      "title": "AlertTriage",
+      "description": "Persisted analyst triage state and TP/FP verdict for an alert campaign.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "campaignKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "triageStatus": {
+          "type": "string",
+          "enum": ["open", "suppressed", "closed"]
+        },
+        "feedback": {
+          "type": "string",
+          "enum": ["none", "true_positive", "false_positive", "benign_positive"]
+        },
+        "feedbackNote": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "campaignKey", "triageStatus", "feedback", "feedbackNote", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private operator profile containing PII (email); strictly owner or admin accessible."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role directory checked by security rules."
+    },
+    "/incident_cases/{caseId}": {
+      "schema": { "$ref": "#/entities/IncidentCase" },
+      "description": "Persistent SOC incident cases owned by authenticated operators."
+    },
+    "/incident_cases/{caseId}/notes/{noteId}": {
+      "schema": { "$ref": "#/entities/CaseNote" },
+      "description": "Investigation notes subcollection gated by parent IncidentCase ownership and atomicity."
+    },
+    "/custom_rules/{ruleId}": {
+      "schema": { "$ref": "#/entities/CustomRule" },
+      "description": "Custom SIEM & Sigma detection rules synced per operator."
+    },
+    "/saved_searches/{searchId}": {
+      "schema": { "$ref": "#/entities/SavedSearch" },
+      "description": "Saved threat-hunting KQL/piped queries."
+    },
+    "/alert_triage/{alertKey}": {
+      "schema": { "$ref": "#/entities/AlertTriage" },
+      "description": "Persisted alert triage status and TP/FP analyst verdicts."
+    }
+  }
+}

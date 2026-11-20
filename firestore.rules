@@ -1,0 +1,353 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // =========================================================================
+    // Global Safety Net (Default Deny)
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Reusable Hardened Global Primitives
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Bootstrapped Admin check (zero DB reads - safe inside allow list)
+    function isBootstrappedAdmin() {
+      return isVerified() && request.auth.token.email == 'shiyam2offical@gmail.com';
+    }
+
+    // Full Admin check (only for single-document get/create/update/delete, never allow list)
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.size() >= 3 && email.size() <= 254 &&
+        email.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+    }
+
+    // =========================================================================
+    // Validation Blueprints (Anti-Update-Gap)
+    // =========================================================================
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        isValidEmail(data.email) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['analyst', 'engineer', 'admin'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'grantedBy', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'grantedBy', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.grantedBy is string && data.grantedBy.size() >= 1 && data.grantedBy.size() <= 128 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidIncidentCase(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'title', 'description', 'severity', 'status', 'assignee', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'title', 'description', 'severity', 'status', 'assignee', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.description is string && data.description.size() <= 4000 &&
+        data.severity in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] &&
+        data.status in ['NEW', 'OPEN', 'IN_PROGRESS', 'CONTAINED', 'RESOLVED', 'CLOSED'] &&
+        data.assignee is string && data.assignee.size() >= 1 && data.assignee.size() <= 120 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCaseNote(data) {
+      return data.keys().hasAll(['id', 'caseId', 'ownerId', 'author', 'note', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'caseId', 'ownerId', 'author', 'note', 'createdAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.caseId) &&
+        isValidId(data.ownerId) &&
+        data.author is string && data.author.size() >= 1 && data.author.size() <= 120 &&
+        data.note is string && data.note.size() >= 1 && data.note.size() <= 2000 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCustomRule(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'ruleNumericId', 'name', 'title', 'description', 'level', 'logType', 'enabled', 'rawSigma', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'ruleNumericId', 'name', 'title', 'description', 'level', 'logType', 'enabled', 'rawSigma', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        data.ruleNumericId is number && data.ruleNumericId >= 1 && data.ruleNumericId <= 9999999 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.description is string && data.description.size() <= 2000 &&
+        data.level is number && data.level >= 1 && data.level <= 15 &&
+        data.logType is string && data.logType.size() >= 1 && data.logType.size() <= 64 &&
+        data.enabled is bool &&
+        data.rawSigma is string && data.rawSigma.size() <= 8000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSavedSearch(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'query', 'description', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'name', 'query', 'description', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        data.query is string && data.query.size() >= 1 && data.query.size() <= 2000 &&
+        data.description is string && data.description.size() <= 1000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAlertTriage(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'campaignKey', 'triageStatus', 'feedback', 'feedbackNote', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'campaignKey', 'triageStatus', 'feedback', 'feedbackNote', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        data.campaignKey is string && data.campaignKey.size() >= 1 && data.campaignKey.size() <= 256 &&
+        data.triageStatus in ['open', 'suppressed', 'closed'] &&
+        data.feedback in ['none', 'true_positive', 'false_positive', 'benign_positive'] &&
+        data.feedbackNote is string && data.feedbackNote.size() <= 1000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection 1: /users/{userId} (PII Isolated — Owner or Admin Only)
+    // =========================================================================
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isVerified() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        incoming().uid == request.auth.uid &&
+        incoming().email == request.auth.token.email &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          (incoming().role == 'analyst') ||
+          isAdmin()
+        );
+      allow update: if isVerified() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Tier 1: Admin override
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'email', 'updatedAt'])) ||
+          // Tier 2: Owner profile update (cannot touch role or email)
+          (isOwner(userId) && incoming().role == existing().role && incoming().email == existing().email &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Collection 2: /admins/{adminId}
+    // =========================================================================
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isVerified() &&
+        isValidId(adminId) &&
+        isValidAdminRecord(incoming()) &&
+        incoming().uid == adminId &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if false;
+      allow delete: if isValidId(adminId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Collection 3: /incident_cases/{caseId} + /notes/{noteId}
+    // =========================================================================
+    match /incident_cases/{caseId} {
+      allow get: if isSignedIn() && isValidId(caseId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isVerified() &&
+        isValidId(caseId) &&
+        isValidIncidentCase(incoming()) &&
+        incoming().id == caseId &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(caseId) &&
+        isValidIncidentCase(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Tier 1: Admin override (can reopen or edit closed cases)
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'severity', 'status', 'assignee', 'updatedAt'])) ||
+          // Tier 2: Owner actions (terminal state lock: CLOSED cases cannot be modified by non-admins)
+          (existing().ownerId == request.auth.uid && existing().status != 'CLOSED' && (
+            // Action: Triage / status & assignment update
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'assignee', 'severity', 'updatedAt']) ||
+            // Action: Case metadata edit
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'updatedAt']) ||
+            // Action: Atomic timestamp touch when adding a case note
+            incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt'])
+          ))
+        );
+      allow delete: if isVerified() && isValidId(caseId) && (existing().ownerId == request.auth.uid || isAdmin());
+
+      // Subcollection: Investigation Notes (Master Gate + Atomicity Guarantee)
+      match /notes/{noteId} {
+        function parentCase() {
+          return get(/databases/$(database)/documents/incident_cases/$(caseId));
+        }
+
+        allow get: if isSignedIn() && isValidId(caseId) && isValidId(noteId) &&
+          (existing().ownerId == request.auth.uid || isAdmin());
+        allow list: if isSignedIn() && isValidId(caseId) &&
+          (existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() &&
+          isValidId(caseId) &&
+          isValidId(noteId) &&
+          isValidCaseNote(incoming()) &&
+          incoming().id == noteId &&
+          incoming().caseId == caseId &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/incident_cases/$(caseId)) &&
+          (parentCase().data.ownerId == request.auth.uid || isAdmin()) &&
+          (parentCase().data.status != 'CLOSED' || isAdmin()) &&
+          existsAfter(/databases/$(database)/documents/incident_cases/$(caseId)) &&
+          getAfter(/databases/$(database)/documents/incident_cases/$(caseId)).data.updatedAt == request.time;
+        allow update: if false;
+        allow delete: if isVerified() && isValidId(caseId) && isValidId(noteId) &&
+          (existing().ownerId == request.auth.uid || isAdmin());
+      }
+    }
+
+    // =========================================================================
+    // Collection 4: /custom_rules/{ruleId}
+    // =========================================================================
+    match /custom_rules/{ruleId} {
+      allow get: if isSignedIn() && isValidId(ruleId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isVerified() &&
+        isValidId(ruleId) &&
+        isValidCustomRule(incoming()) &&
+        incoming().id == ruleId &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(ruleId) &&
+        isValidCustomRule(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().ruleNumericId == existing().ruleNumericId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'title', 'description', 'level', 'logType', 'enabled', 'rawSigma', 'updatedAt'])) ||
+          (existing().ownerId == request.auth.uid && (
+            // Action: Toggle enabled state
+            incoming().diff(existing()).affectedKeys().hasOnly(['enabled', 'updatedAt']) ||
+            // Action: Edit rule definition
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'title', 'description', 'level', 'logType', 'rawSigma', 'enabled', 'updatedAt'])
+          ))
+        );
+      allow delete: if isVerified() && isValidId(ruleId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // =========================================================================
+    // Collection 5: /saved_searches/{searchId}
+    // =========================================================================
+    match /saved_searches/{searchId} {
+      allow get: if isSignedIn() && isValidId(searchId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isVerified() &&
+        isValidId(searchId) &&
+        isValidSavedSearch(incoming()) &&
+        incoming().id == searchId &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(searchId) &&
+        isValidSavedSearch(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'query', 'description', 'updatedAt'])) ||
+          (existing().ownerId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'query', 'description', 'updatedAt']))
+        );
+      allow delete: if isVerified() && isValidId(searchId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // =========================================================================
+    // Collection 6: /alert_triage/{alertKey}
+    // =========================================================================
+    match /alert_triage/{alertKey} {
+      allow get: if isSignedIn() && isValidId(alertKey) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isVerified() &&
+        isValidId(alertKey) &&
+        isValidAlertTriage(incoming()) &&
+        incoming().id == alertKey &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() &&
+        isValidId(alertKey) &&
+        isValidAlertTriage(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().campaignKey == existing().campaignKey &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['triageStatus', 'feedback', 'feedbackNote', 'updatedAt'])) ||
+          (existing().ownerId == request.auth.uid && (
+            // Action: Triage status change
+            incoming().diff(existing()).affectedKeys().hasOnly(['triageStatus', 'updatedAt']) ||
+            // Action: Analyst verdict feedback
+            incoming().diff(existing()).affectedKeys().hasOnly(['feedback', 'feedbackNote', 'triageStatus', 'updatedAt'])
+          ))
+        );
+      allow delete: if isVerified() && isValidId(alertKey) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+  }
+}
